@@ -20,6 +20,10 @@ export class Participant {
     this.roomId = roomId;
   }
 
+  public static from(row: DBParticipant): Participant {
+    return new Participant(row.id, row.username, row.role, row.roomId);
+  }
+
   public isHost(): boolean {
     return this.role === Role.HOST;
   }

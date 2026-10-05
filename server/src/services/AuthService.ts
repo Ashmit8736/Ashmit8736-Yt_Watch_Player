@@ -4,7 +4,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { runQuery, getQuery } from '../config/db';
 import { UserRecord, AuthUser } from '../models/User';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-watch-party-key-2026';
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET must be set in production');
+}
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-insecure-secret';
 
 export class AuthService {
   static async register(username: string, password: string, name?: string): Promise<{ user: AuthUser; token: string }> {

@@ -21,32 +21,16 @@ const HomePage: React.FC = () => {
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
-  const [createUsername, setCreateUsername] = useState('');
-  const [joinUsername, setJoinUsername] = useState('');
   const [roomId, setRoomId] = useState('');
   const [activeRooms, setActiveRooms] = useState<ActiveRoom[]>([]);
-  const [activeRoomMessage, setActiveRoomMessage] = useState('');
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (user) {
-      setCreateUsername(user.username);
-      setJoinUsername(user.username);
-    }
-  }, [user]);
 
   useEffect(() => {
     const fetchActiveRooms = async () => {
       try {
         const res = await api.get('/api/rooms/active');
         const data = res.data;
-        if (data.rooms && data.rooms.length > 0) {
-          setActiveRooms(data.rooms);
-          const latest = data.rooms[data.rooms.length - 1];
-          setRoomId(latest.id);
-        } else {
-          setActiveRooms([]);
-        }
+        setActiveRooms(data.rooms || []);
       } catch (err) {
         console.error('Error fetching active rooms:', err);
       }
@@ -84,72 +68,16 @@ const HomePage: React.FC = () => {
     }
   };
 
-  const checkUserExists = async (uname: string): Promise<boolean> => {
-    try {
-      const res = await api.get(`/api/auth/check/${encodeURIComponent(uname)}`);
-      return !!res.data.exists;
-    } catch {
-      return false;
-    }
-  };
-
-  const handleCreateRoom = async (e: React.FormEvent) => {
+  const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
-    const uname = user ? user.username : createUsername.trim();
-    if (!uname) return alert('Please enter a username or log in');
-
-    // If user is not logged in, check if this username is registered
-    if (!user) {
-      const exists = await checkUserExists(uname);
-      if (!exists) {
-        setAuthMode('register');
-        setAuthUsername(uname);
-        setAuthError(`⚠️ Invalid username: '@${uname}' is not registered. Please register below first!`);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        return alert(`Invalid username: '@${uname}' is not registered.\n\nPlease register below to get Watch Party access!`);
-      }
-    }
-
-    if (activeRooms.length > 0) {
-      const existing = activeRooms[activeRooms.length - 1];
-      if (existing.hostUsername !== uname) {
-        setRoomId(existing.id);
-        setActiveRoomMessage(
-          `⚠️ Room already reserved by host (@${existing.hostUsername})! Room ID "${existing.id}" has been auto-filled. Please join the existing room.`
-        );
-        return;
-      }
-    }
-
-    navigate(`/room/new?username=${encodeURIComponent(uname)}`);
+    if (!user) return;
+    navigate('/room/new');
   };
 
-  const handleJoinRoom = async (e: React.FormEvent) => {
+  const handleJoinRoom = (e: React.FormEvent) => {
     e.preventDefault();
-    const uname = user ? user.username : joinUsername.trim();
-    if (!uname || !roomId.trim()) return alert('Please enter username and Room ID');
-
-    // If user is not logged in, check if this username is registered
-    if (!user) {
-      const exists = await checkUserExists(uname);
-      if (!exists) {
-        setAuthMode('register');
-        setAuthUsername(uname);
-        setAuthError(`⚠️ Invalid username: '@${uname}' is not registered. Please register below first!`);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        return alert(`Invalid username: '@${uname}' is not registered.\n\nPlease register below to get Watch Party access!`);
-      }
-    }
-
-    navigate(`/room/${roomId.trim()}?username=${encodeURIComponent(uname)}`);
-  };
-
-  const handleQuickJoinActive = (activeId: string) => {
-    setRoomId(activeId);
-    const uname = user ? user.username : joinUsername.trim();
-    if (uname) {
-      navigate(`/room/${activeId}?username=${encodeURIComponent(uname)}`);
-    }
+    if (!user || !roomId.trim()) return;
+    navigate(`/room/${roomId.trim()}`);
   };
 
   return (
@@ -160,35 +88,28 @@ const HomePage: React.FC = () => {
           Watch videos synchronized in real-time with friends
         </p>
 
-        {/* Active Room Notification Banner */}
+        {/* Live rooms */}
         {activeRooms.length > 0 && (
           <div className="active-party-banner">
             <div className="active-party-header">
-              <span className="active-party-badge">
-                🟢 Active Watch Party Found!
-              </span>
-              <span className="active-party-count">
-                {activeRooms[activeRooms.length - 1].participantCount} watching
-              </span>
+              <span className="active-party-badge">🟢 Live Watch Parties ({activeRooms.length})</span>
             </div>
-            <div style={{ fontSize: '13px', color: '#2c3e50' }}>
-              Hosted by: <strong>@{activeRooms[activeRooms.length - 1].hostUsername}</strong> (Room ID: <code>{activeRooms[activeRooms.length - 1].id}</code>)
-            </div>
-            <button
-              type="button"
-              onClick={() => handleQuickJoinActive(activeRooms[activeRooms.length - 1].id)}
-              className="btn"
-              style={{ padding: '6px 14px', fontSize: '13px', alignSelf: 'flex-start', marginTop: '4px' }}
-            >
-              Auto-Fill & Join This Room
-            </button>
-          </div>
-        )}
-
-        {/* Warning Message if Host already created room */}
-        {activeRoomMessage && (
-          <div className="auth-error-msg" style={{ marginBottom: '18px' }}>
-            {activeRoomMessage}
+            {activeRooms.map((room) => (
+              <div key={room.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                <div style={{ fontSize: '13px', color: '#2c3e50' }}>
+                  <code>{room.id}</code> · hosted by <strong>@{room.hostUsername}</strong> · {room.participantCount} watching
+                </div>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={!user}
+                  onClick={() => navigate(`/room/${room.id}`)}
+                  style={{ padding: '4px 12px', fontSize: '13px' }}
+                >
+                  Join
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
@@ -285,16 +206,9 @@ const HomePage: React.FC = () => {
         {/* Create Room Section */}
         <form onSubmit={handleCreateRoom} style={{ marginBottom: '25px' }}>
           <h3 style={{ marginTop: 0, marginBottom: '12px' }}>Create a New Room</h3>
-          {!user && (
-            <input 
-              type="text" 
-              placeholder="Your Username" 
-              className="input-field"
-              value={createUsername}
-              onChange={(e) => setCreateUsername(e.target.value)}
-            />
-          )}
-          <button type="submit" className="btn" style={{ width: '100%' }}>Create Watch Party</button>
+          <button type="submit" className="btn" style={{ width: '100%' }} disabled={!user}>
+            {user ? 'Create Watch Party' : 'Log in to create a party'}
+          </button>
         </form>
 
         <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid #eee' }} />
@@ -302,15 +216,6 @@ const HomePage: React.FC = () => {
         {/* Join Room Section */}
         <form onSubmit={handleJoinRoom}>
           <h3 style={{ marginTop: 0, marginBottom: '12px' }}>Join an Existing Room</h3>
-          {!user && (
-            <input 
-              type="text" 
-              placeholder="Your Username" 
-              className="input-field"
-              value={joinUsername}
-              onChange={(e) => setJoinUsername(e.target.value)}
-            />
-          )}
           <input 
             type="text" 
             placeholder="Room ID" 
@@ -318,7 +223,9 @@ const HomePage: React.FC = () => {
             value={roomId}
             onChange={(e) => setRoomId(e.target.value)}
           />
-          <button type="submit" className="btn" style={{ width: '100%' }}>Join Watch Party</button>
+          <button type="submit" className="btn" style={{ width: '100%' }} disabled={!user || !roomId.trim()}>
+            {user ? 'Join Watch Party' : 'Log in to join a party'}
+          </button>
         </form>
       </div>
     </div>

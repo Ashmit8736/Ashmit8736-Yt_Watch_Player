@@ -97,20 +97,21 @@ class RoomManagerService {
   }
 
   async getActiveRooms(): Promise<{ id: string; hostUsername: string; participantCount: number }[]> {
-    const rooms = await allQuery<{ id: string }>('SELECT id FROM rooms');
-    const result: { id: string; hostUsername: string; participantCount: number }[] = [];
-    for (const r of rooms) {
-      const room = await this.getRoom(r.id);
-      if (room && room.participants.length > 0) {
-        const host = room.participants.find(p => p.role === Role.HOST);
-        result.push({
-          id: r.id,
-          hostUsername: host ? host.username : (room.participants[0]?.username || 'Unknown'),
-          participantCount: room.participants.length
-        });
-      }
+    const rows = await allQuery<DBParticipant>('SELECT * FROM participants');
+    const byRoom = new Map<string, DBParticipant[]>();
+    for (const p of rows) {
+      const list = byRoom.get(p.roomId) || [];
+      list.push(p);
+      byRoom.set(p.roomId, list);
     }
-    return result;
+    return Array.from(byRoom.entries()).map(([id, list]) => {
+      const host = list.find(p => p.role === Role.HOST);
+      return {
+        id,
+        hostUsername: host ? host.username : list[0].username,
+        participantCount: list.length
+      };
+    });
   }
 }
 

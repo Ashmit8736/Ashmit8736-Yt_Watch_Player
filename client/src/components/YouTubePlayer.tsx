@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRoomContext } from '../context/RoomContext';
 import { useSocket } from '../context/SocketContext';
 import '../styles/player.css';
@@ -8,6 +8,9 @@ const YouTubePlayer: React.FC = () => {
   const { socket } = useSocket();
   const playerRef = useRef<any>(null);
   const isReady = useRef(false);
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const isDragging = useRef(false);
 
   const videoStateRef = useRef(videoState);
   const currentUserRef = useRef(currentUser);
@@ -120,12 +123,53 @@ const YouTubePlayer: React.FC = () => {
 
   const canControl = currentUser?.role === 'Host' || currentUser?.role === 'Moderator';
 
+  // Poll the player so the seek bar follows playback (everyone sees progress)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const player = playerRef.current;
+      if (!isReady.current || !player?.getCurrentTime || isDragging.current) return;
+      setPosition(player.getCurrentTime() || 0);
+      setDuration(player.getDuration?.() || 0);
+    }, 500);
+    return () => clearInterval(timer);
+  }, []);
+
+  const commitSeek = () => {
+    isDragging.current = false;
+    socket.emit('seek', { time: position });
+  };
+
+  const formatTime = (t: number) => {
+    const total = Math.max(0, Math.floor(t));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+  };
+
   return (
-    <div 
-      className="player-card"
-      style={{ pointerEvents: canControl ? 'auto' : 'none' }}
-    >
-      <div id="youtube-player"></div>
+    <div className="player-card">
+      <div style={{ pointerEvents: canControl ? 'auto' : 'none' }}>
+        <div id="youtube-player"></div>
+      </div>
+      <div className="seek-bar" style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 4px' }}>
+        <span style={{ fontSize: '12px', minWidth: '40px', color: '#e2e8f0' }}>{formatTime(position)}</span>
+        <input
+          type="range"
+          min={0}
+          max={duration || 0}
+          step={1}
+          value={Math.min(position, duration || 0)}
+          disabled={!canControl || !duration}
+          onChange={(e) => {
+            isDragging.current = true;
+            setPosition(Number(e.target.value));
+          }}
+          onPointerUp={commitSeek}
+          onKeyUp={commitSeek}
+          style={{ flex: 1 }}
+          aria-label="Seek"
+          title={canControl ? 'Drag to seek for everyone' : 'Only Host/Moderator can seek'}
+        />
+        <span style={{ fontSize: '12px', minWidth: '40px', color: '#e2e8f0' }}>{formatTime(duration)}</span>
+      </div>
     </div>
   );
 };

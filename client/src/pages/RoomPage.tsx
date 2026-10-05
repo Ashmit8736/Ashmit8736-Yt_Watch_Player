@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useRoomContext, Participant } from '../context/RoomContext';
 import { Events } from '../constants/events';
@@ -22,8 +23,8 @@ interface PendingRequest {
 
 const RoomPage: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
-  const [searchParams] = useSearchParams();
-  const username = searchParams.get('username');
+  const { user, logout } = useAuth();
+  const username = user?.username;
   const navigate = useNavigate();
 
   const { socket, isConnected } = useSocket();
@@ -36,25 +37,26 @@ const RoomPage: React.FC = () => {
     currentUser
   } = useRoomContext();
 
-  const [activeRequest, setActiveRequest] = useState<PendingRequest | null>(null);
+  const [requestQueue, setRequestQueue] = useState<PendingRequest[]>([]);
+  const activeRequest = requestQueue[0] ?? null;
   const [userNotification, setUserNotification] = useState<string | null>(null);
 
   useEffect(() => {
     if (!username) {
-      alert('Username is required to join a room');
-      navigate('/');
+      // Not logged in (e.g. opened a shared link): go home and remember the room
+      navigate(roomId && roomId !== 'new' ? `/?autoRoom=${encodeURIComponent(roomId)}` : '/', { replace: true });
       return;
     }
 
     if (!isConnected) return;
 
     const actualRoomId = roomId === 'new' ? undefined : roomId;
-    socket.emit(Events.JOIN_ROOM, { roomId: actualRoomId, username, create: roomId === 'new' });
+    socket.emit(Events.JOIN_ROOM, { roomId: actualRoomId, create: roomId === 'new' });
 
     const onRoomJoined = (data: { roomId: string }) => {
       setRoomId(data.roomId);
       if (roomId === 'new') {
-        window.history.replaceState(null, '', `/room/${data.roomId}?username=${encodeURIComponent(username)}`);
+        window.history.replaceState(null, '', `/room/${data.roomId}`);
       }
     };
 
@@ -79,7 +81,7 @@ const RoomPage: React.FC = () => {
     };
 
     const onActionRequested = (data: PendingRequest) => {
-      setActiveRequest(data);
+      setRequestQueue((q) => [...q, data]);
     };
 
     const onRequestApproved = (data: { message: string }) => {
@@ -98,7 +100,16 @@ const RoomPage: React.FC = () => {
     };
 
     const onError = (data: { message: string }) => {
+      // Permission errors are not fatal: show a toast and stay in the room
+      if (data.message.startsWith('Unauthorized') || data.message === 'Invalid role') {
+        setUserNotification(`⚠️ ${data.message}`);
+        setTimeout(() => setUserNotification(null), 5000);
+        return;
+      }
       alert(data.message);
+      if (data.message.startsWith('Authentication required') || data.message.startsWith('Invalid user')) {
+        logout();
+      }
       navigate('/');
     };
 
@@ -140,7 +151,7 @@ const RoomPage: React.FC = () => {
       action: activeRequest.action,
       value: activeRequest.value
     });
-    setActiveRequest(null);
+    setRequestQueue((q) => q.slice(1));
   };
 
   const handleRejectRequest = () => {
@@ -150,7 +161,7 @@ const RoomPage: React.FC = () => {
       requesterId: activeRequest.requesterId,
       requesterName: activeRequest.requesterName
     });
-    setActiveRequest(null);
+    setRequestQueue((q) => q.slice(1));
   };
 
   if (!currentRoomId) {
@@ -171,6 +182,7 @@ const RoomPage: React.FC = () => {
       {isPrivileged && activeRequest && (
         <div style={{
           backgroundColor: '#1e293b',
+          color: '#f1f5f9',
           border: '1px solid #6366f1',
           borderRadius: '10px',
           padding: '12px 18px',
@@ -183,9 +195,10 @@ const RoomPage: React.FC = () => {
         }}>
           <div>
             <span style={{ fontSize: '1.2rem', marginRight: '8px' }}>🔔</span>
-            <strong>@{activeRequest.requesterName}</strong> requested to{' '}
+            {requestQueue.length > 1 && <span style={{ marginRight: '8px', opacity: 0.7 }}>(+{requestQueue.length - 1} more)</span>}
+            <strong style={{ color: '#fff' }}>@{activeRequest.requesterName}</strong> requested to{' '}
             {activeRequest.action === 'change_video' ? (
-              <span>change video to <code>{activeRequest.value}</code></span>
+              <span>change video to <code style={{ backgroundColor: '#0f172a', color: '#a5b4fc', padding: '2px 6px', borderRadius: '4px' }}>{activeRequest.value}</code></span>
             ) : (
               <span>be promoted to Moderator</span>
             )}

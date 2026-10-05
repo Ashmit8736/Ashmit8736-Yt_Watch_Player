@@ -15,9 +15,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const { token } = useAuth();
 
   useEffect(() => {
-    if (token) {
-      socket.auth = { token };
-    }
+    // Reconnect so the handshake always carries the current JWT
+    if (socket.connected) socket.disconnect();
+    socket.auth = token ? { token } : {};
     socket.connect();
 
     const onConnect = () => setIsConnected(true);

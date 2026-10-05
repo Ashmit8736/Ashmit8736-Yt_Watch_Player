@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { RoomManager } from '../services/RoomManager';
 import { AuthService } from '../services/AuthService';
 import { Role } from '../constants/roles';
+import { Participant } from '../models/Participant';
 import { Events } from '../constants/events';
 import { generateRoomId } from '../utils/generateRoomId';
 import { v4 as uuidv4 } from 'uuid';
@@ -34,19 +35,20 @@ export class SocketController {
 
   private async handleJoinRoom(payload: { roomId?: string; username: string; create?: boolean }): Promise<void> {
     try {
-      if (!payload.username) {
-        this.socket.emit(Events.ERROR, { message: 'Username is required. Please register or login first!' });
+      // Identity comes only from the verified JWT, never from the client payload
+      const authUser = this.socket.data.authUser;
+      if (!authUser) {
+        this.socket.emit(Events.ERROR, { message: 'Authentication required. Please login or register first!' });
         return;
       }
-
-      // Check if user is registered in the database
-      const registeredUser = await AuthService.findUserByUsername(payload.username);
+      const registeredUser = await AuthService.findUserByUsername(authUser.username);
       if (!registeredUser) {
-        this.socket.emit(Events.ERROR, { 
-          message: `Invalid username: User '@${payload.username}' is not registered. Please register first!` 
+        this.socket.emit(Events.ERROR, {
+          message: `Invalid user: '@${authUser.username}' is not registered. Please register first!`
         });
         return;
       }
+      payload.username = authUser.username;
 
       let roomId = payload.roomId?.trim();
       let isCreator = payload.create || false;
@@ -98,11 +100,16 @@ export class SocketController {
     }
   }
 
+  private async getActor(): Promise<Participant | undefined> {
+    const row = await RoomManager.getParticipant(this.socket.id);
+    return row ? Participant.from(row) : undefined;
+  }
+
   private async handlePlay(): Promise<void> {
     const roomId = this.socket.data.roomId;
     if (!roomId) return;
-    const participant = await RoomManager.getParticipant(this.socket.id);
-    if (!participant || (participant.role !== Role.HOST && participant.role !== Role.MODERATOR)) {
+    const participant = await this.getActor();
+    if (!participant || !participant.canControlPlayback()) {
       this.socket.emit(Events.ERROR, { message: 'Unauthorized: Host or Moderator privileges required' });
       return;
     }
@@ -116,8 +123,8 @@ export class SocketController {
   private async handlePause(): Promise<void> {
     const roomId = this.socket.data.roomId;
     if (!roomId) return;
-    const participant = await RoomManager.getParticipant(this.socket.id);
-    if (!participant || (participant.role !== Role.HOST && participant.role !== Role.MODERATOR)) {
+    const participant = await this.getActor();
+    if (!participant || !participant.canControlPlayback()) {
       this.socket.emit(Events.ERROR, { message: 'Unauthorized: Host or Moderator privileges required' });
       return;
     }
@@ -131,8 +138,8 @@ export class SocketController {
   private async handleSeek(payload: { time: number }): Promise<void> {
     const roomId = this.socket.data.roomId;
     if (!roomId || typeof payload.time !== 'number') return;
-    const participant = await RoomManager.getParticipant(this.socket.id);
-    if (!participant || (participant.role !== Role.HOST && participant.role !== Role.MODERATOR)) {
+    const participant = await this.getActor();
+    if (!participant || !participant.canControlPlayback()) {
       this.socket.emit(Events.ERROR, { message: 'Unauthorized: Host or Moderator privileges required' });
       return;
     }
@@ -146,8 +153,8 @@ export class SocketController {
   private async handleChangeVideo(payload: { videoId: string }): Promise<void> {
     const roomId = this.socket.data.roomId;
     if (!roomId || !payload.videoId) return;
-    const participant = await RoomManager.getParticipant(this.socket.id);
-    if (!participant || (participant.role !== Role.HOST && participant.role !== Role.MODERATOR)) {
+    const participant = await this.getActor();
+    if (!participant || !participant.canControlPlayback()) {
       this.socket.emit(Events.ERROR, { message: 'Unauthorized: Host or Moderator privileges required' });
       return;
     }
@@ -210,8 +217,8 @@ export class SocketController {
     const roomId = this.socket.data.roomId;
     if (!roomId) return;
 
-    const approver = await RoomManager.getParticipant(this.socket.id);
-    if (!approver || (approver.role !== Role.HOST && approver.role !== Role.MODERATOR)) {
+    const approver = await this.getActor();
+    if (!approver || !approver.canControlPlayback()) {
       this.socket.emit(Events.ERROR, { message: 'Unauthorized: Only Host or Moderator can approve requests' });
       return;
     }
@@ -257,8 +264,8 @@ export class SocketController {
     const roomId = this.socket.data.roomId;
     if (!roomId) return;
 
-    const rejector = await RoomManager.getParticipant(this.socket.id);
-    if (!rejector || (rejector.role !== Role.HOST && rejector.role !== Role.MODERATOR)) {
+    const rejector = await this.getActor();
+    if (!rejector || !rejector.canControlPlayback()) {
       this.socket.emit(Events.ERROR, { message: 'Unauthorized' });
       return;
     }
@@ -273,9 +280,14 @@ export class SocketController {
   private async handleAssignRole(payload: { userId: string; role: Role }): Promise<void> {
     const roomId = this.socket.data.roomId;
     if (!roomId) return;
-    const currentParticipant = await RoomManager.getParticipant(this.socket.id);
-    if (!currentParticipant || currentParticipant.role !== Role.HOST) {
+    const currentParticipant = await this.getActor();
+    if (!currentParticipant || !currentParticipant.canManageRoles()) {
       this.socket.emit(Events.ERROR, { message: 'Unauthorized: Host only' });
+      return;
+    }
+
+    if (!Object.values(Role).includes(payload.role)) {
+      this.socket.emit(Events.ERROR, { message: 'Invalid role' });
       return;
     }
 
@@ -298,8 +310,8 @@ export class SocketController {
   private async handleRemoveParticipant(payload: { userId: string }): Promise<void> {
     const roomId = this.socket.data.roomId;
     if (!roomId) return;
-    const currentParticipant = await RoomManager.getParticipant(this.socket.id);
-    if (!currentParticipant || currentParticipant.role !== Role.HOST) {
+    const currentParticipant = await this.getActor();
+    if (!currentParticipant || !currentParticipant.canManageRoles()) {
       this.socket.emit(Events.ERROR, { message: 'Unauthorized: Host only' });
       return;
     }
@@ -347,66 +359,49 @@ export class SocketController {
     });
   }
 
-  private async handleLeaveRoom(): Promise<void> {
+  private async leaveCurrentRoom(): Promise<void> {
     const roomId = this.socket.data.roomId;
     if (!roomId) return;
     this.socket.leave(roomId);
+    this.socket.data.roomId = null;
+
     const room = await RoomManager.getRoom(roomId);
-    if (room) {
-      const leavingUser = room.participants.find(p => p.id === this.socket.id);
-      const wasHost = leavingUser?.role === Role.HOST;
+    if (!room) return;
 
-      await RoomManager.removeParticipant(this.socket.id);
-      const updatedRoom = await RoomManager.getRoom(roomId);
-      const participants = updatedRoom ? updatedRoom.participants : [];
-      this.io.to(roomId).emit(Events.USER_LEFT, {
-        username: this.socket.data.username,
-        userId: this.socket.id,
-        participants: participants
-      });
+    const leavingUser = room.participants.find(p => p.id === this.socket.id);
+    const wasHost = leavingUser?.role === Role.HOST;
 
-      if (participants.length === 0) {
-        await RoomManager.deleteRoom(roomId);
-      } else if (wasHost) {
-        await RoomManager.updateVideoState(roomId, { playState: 'paused' });
-        const pausedRoom = await RoomManager.getRoom(roomId);
-        if (pausedRoom) {
-          this.io.to(roomId).emit(Events.SYNC_STATE, pausedRoom.videoState);
-        }
+    await RoomManager.removeParticipant(this.socket.id);
+    const updatedRoom = await RoomManager.getRoom(roomId);
+    const participants = updatedRoom ? updatedRoom.participants : [];
+    this.io.to(roomId).emit(Events.USER_LEFT, {
+      username: this.socket.data.username,
+      userId: this.socket.id,
+      participants
+    });
+
+    if (participants.length === 0) {
+      await RoomManager.deleteRoom(roomId);
+    } else if (wasHost) {
+      await RoomManager.updateVideoState(roomId, { playState: 'paused' });
+      const pausedRoom = await RoomManager.getRoom(roomId);
+      if (pausedRoom) {
+        this.io.to(roomId).emit(Events.SYNC_STATE, pausedRoom.videoState);
       }
     }
-    this.socket.data.roomId = null;
+  }
+
+  private async handleLeaveRoom(): Promise<void> {
+    try {
+      await this.leaveCurrentRoom();
+    } catch (err) {
+      console.error('Error on leave:', err);
+    }
   }
 
   private async handleDisconnect(): Promise<void> {
     try {
-      const roomId = this.socket.data.roomId;
-      if (roomId) {
-        const room = await RoomManager.getRoom(roomId);
-        if (room) {
-          const leavingUser = room.participants.find(p => p.id === this.socket.id);
-          const wasHost = leavingUser?.role === Role.HOST;
-
-          await RoomManager.removeParticipant(this.socket.id);
-          const updatedRoom = await RoomManager.getRoom(roomId);
-          const participants = updatedRoom ? updatedRoom.participants : [];
-          this.io.to(roomId).emit(Events.USER_LEFT, {
-            username: this.socket.data.username,
-            userId: this.socket.id,
-            participants: participants
-          });
-
-          if (participants.length === 0) {
-            await RoomManager.deleteRoom(roomId);
-          } else if (wasHost) {
-            await RoomManager.updateVideoState(roomId, { playState: 'paused' });
-            const pausedRoom = await RoomManager.getRoom(roomId);
-            if (pausedRoom) {
-              this.io.to(roomId).emit(Events.SYNC_STATE, pausedRoom.videoState);
-            }
-          }
-        }
-      }
+      await this.leaveCurrentRoom();
     } catch (err) {
       console.error('Error on disconnect:', err);
     }
