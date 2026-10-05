@@ -9,14 +9,19 @@ export class RoomController {
       const allRooms = await RoomManager.getActiveRooms();
 
       const liveRooms = allRooms.filter(r => {
-        if (!io) return true;
-        const socketRoom = io.sockets.adapter.rooms.get(r.id);
-        return socketRoom && socketRoom.size > 0;
+        if (!io || !io.sockets || !io.sockets.adapter) return true;
+        try {
+          const socketRoom = (io.sockets.adapter.rooms as any)?.get?.(r.id);
+          return socketRoom ? socketRoom.size > 0 : true;
+        } catch {
+          return true;
+        }
       });
 
       res.json({ rooms: liveRooms });
     } catch (err: any) {
-      res.status(500).json({ error: err.message || 'Failed to fetch active rooms' });
+      console.error('Error fetching active rooms:', err);
+      res.json({ rooms: [] });
     }
   }
 
@@ -25,9 +30,13 @@ export class RoomController {
       const io: Server = req.app.get('io');
       const allRooms = await RoomManager.getActiveRooms();
       const liveRooms = allRooms.filter(r => {
-        if (!io) return true;
-        const socketRoom = io.sockets.adapter.rooms.get(r.id);
-        return socketRoom && socketRoom.size > 0;
+        if (!io || !io.sockets || !io.sockets.adapter) return true;
+        try {
+          const socketRoom = (io.sockets.adapter.rooms as any)?.get?.(r.id);
+          return socketRoom ? socketRoom.size > 0 : true;
+        } catch {
+          return true;
+        }
       });
 
       if (liveRooms.length > 0) {
@@ -36,7 +45,8 @@ export class RoomController {
         res.json({ room: null });
       }
     } catch (err: any) {
-      res.status(500).json({ error: err.message || 'Failed to fetch latest room' });
+      console.error('Error fetching latest room:', err);
+      res.json({ room: null });
     }
   }
 }

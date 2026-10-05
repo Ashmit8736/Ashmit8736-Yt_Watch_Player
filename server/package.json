@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node dist/server.js",
     "dev": "nodemon src/server.ts",
-    "build": "npm rebuild sqlite3 --build-from-source && tsc"
+    "build": "tsc"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",

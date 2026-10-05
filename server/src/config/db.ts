@@ -1,14 +1,14 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
 
-// Store SQLite DB file in project root
-const dbPath = path.resolve(__dirname, '../../../dev.sqlite');
+// Store SQLite DB file reliably in current working directory
+const dbPath = path.resolve(process.cwd(), 'dev.sqlite');
 
 export const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening sqlite3 database:', err.message);
   } else {
-    console.log('Connected to the local SQLite database.');
+    console.log(`Connected to SQLite database at ${dbPath}`);
   }
 });
 
