@@ -2,9 +2,9 @@
   "name": "watch-party-server",
   "version": "1.0.0",
   "description": "YouTube Watch Party Server",
-  "main": "src/server.ts",
+  "main": "dist/server.js",
   "scripts": {
-    "start": "ts-node src/server.ts",
+    "start": "node dist/server.js",
     "dev": "nodemon src/server.ts",
     "build": "tsc"
   },

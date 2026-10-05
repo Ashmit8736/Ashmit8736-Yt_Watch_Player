@@ -4,6 +4,7 @@ import { AuthService } from '../services/AuthService';
 import { Role } from '../constants/roles';
 import { Events } from '../constants/events';
 import { generateRoomId } from '../utils/generateRoomId';
+import { v4 as uuidv4 } from 'uuid';
 
 export class SocketController {
   private io: Server;
@@ -25,6 +26,9 @@ export class SocketController {
     this.socket.on(Events.REMOVE_PARTICIPANT, this.handleRemoveParticipant.bind(this));
     this.socket.on(Events.CHAT_MESSAGE, this.handleChatMessage.bind(this));
     this.socket.on(Events.REACTION, this.handleReaction.bind(this));
+    this.socket.on(Events.REQUEST_CHANGE, this.handleRequestChange.bind(this));
+    this.socket.on(Events.APPROVE_REQUEST, this.handleApproveRequest.bind(this));
+    this.socket.on(Events.REJECT_REQUEST, this.handleRejectRequest.bind(this));
     this.socket.on('disconnect', this.handleDisconnect.bind(this));
   }
 
@@ -99,7 +103,7 @@ export class SocketController {
     if (!roomId) return;
     const participant = await RoomManager.getParticipant(this.socket.id);
     if (!participant || (participant.role !== Role.HOST && participant.role !== Role.MODERATOR)) {
-      this.socket.emit(Events.ERROR, { message: 'Unauthorized' });
+      this.socket.emit(Events.ERROR, { message: 'Unauthorized: Host or Moderator privileges required' });
       return;
     }
     await RoomManager.updateVideoState(roomId, { playState: 'playing' });
@@ -114,7 +118,7 @@ export class SocketController {
     if (!roomId) return;
     const participant = await RoomManager.getParticipant(this.socket.id);
     if (!participant || (participant.role !== Role.HOST && participant.role !== Role.MODERATOR)) {
-      this.socket.emit(Events.ERROR, { message: 'Unauthorized' });
+      this.socket.emit(Events.ERROR, { message: 'Unauthorized: Host or Moderator privileges required' });
       return;
     }
     await RoomManager.updateVideoState(roomId, { playState: 'paused' });
@@ -129,7 +133,7 @@ export class SocketController {
     if (!roomId || typeof payload.time !== 'number') return;
     const participant = await RoomManager.getParticipant(this.socket.id);
     if (!participant || (participant.role !== Role.HOST && participant.role !== Role.MODERATOR)) {
-      this.socket.emit(Events.ERROR, { message: 'Unauthorized' });
+      this.socket.emit(Events.ERROR, { message: 'Unauthorized: Host or Moderator privileges required' });
       return;
     }
     await RoomManager.updateVideoState(roomId, { currentTime: payload.time });
@@ -144,7 +148,7 @@ export class SocketController {
     if (!roomId || !payload.videoId) return;
     const participant = await RoomManager.getParticipant(this.socket.id);
     if (!participant || (participant.role !== Role.HOST && participant.role !== Role.MODERATOR)) {
-      this.socket.emit(Events.ERROR, { message: 'Unauthorized' });
+      this.socket.emit(Events.ERROR, { message: 'Unauthorized: Host or Moderator privileges required' });
       return;
     }
     await RoomManager.updateVideoState(roomId, {
@@ -156,6 +160,114 @@ export class SocketController {
     if (room) {
       this.io.to(roomId).emit(Events.SYNC_STATE, room.videoState);
     }
+  }
+
+  // --- Participant Request & Admin Approval Workflow ---
+  private async handleRequestChange(payload: { action: string; value?: any; reason?: string }): Promise<void> {
+    const roomId = this.socket.data.roomId;
+    if (!roomId) return;
+
+    const requester = await RoomManager.getParticipant(this.socket.id);
+    if (!requester) {
+      this.socket.emit(Events.ERROR, { message: 'You are not in an active room' });
+      return;
+    }
+
+    const room = await RoomManager.getRoom(roomId);
+    if (!room) return;
+
+    const requestId = uuidv4();
+    const requestPayload = {
+      requestId,
+      requesterId: this.socket.id,
+      requesterName: requester.username,
+      action: payload.action || 'change_video',
+      value: payload.value,
+      reason: payload.reason || '',
+      timestamp: Date.now()
+    };
+
+    // Find all Hosts and Moderators in this room
+    const privilegedParticipants = room.participants.filter(
+      p => p.role === Role.HOST || p.role === Role.MODERATOR
+    );
+
+    // Send request notification to Host and Moderators
+    privilegedParticipants.forEach(p => {
+      this.io.to(p.id).emit(Events.ACTION_REQUESTED, requestPayload);
+    });
+
+    // Notify requester that their request has been submitted
+    this.socket.emit(Events.CHAT_MESSAGE, {
+      userId: 'system',
+      username: 'System',
+      text: `Your request to ${payload.action === 'change_video' ? 'change video' : 'modify playback'} has been sent to the Host & Moderators for approval.`,
+      timestamp: Date.now()
+    });
+  }
+
+  private async handleApproveRequest(payload: { requestId: string; requesterId: string; requesterName: string; action: string; value?: any }): Promise<void> {
+    const roomId = this.socket.data.roomId;
+    if (!roomId) return;
+
+    const approver = await RoomManager.getParticipant(this.socket.id);
+    if (!approver || (approver.role !== Role.HOST && approver.role !== Role.MODERATOR)) {
+      this.socket.emit(Events.ERROR, { message: 'Unauthorized: Only Host or Moderator can approve requests' });
+      return;
+    }
+
+    // Execute requested action
+    if (payload.action === 'change_video' && payload.value) {
+      await RoomManager.updateVideoState(roomId, {
+        videoId: payload.value,
+        currentTime: 0,
+        playState: 'paused'
+      });
+      const room = await RoomManager.getRoom(roomId);
+      if (room) {
+        this.io.to(roomId).emit(Events.SYNC_STATE, room.videoState);
+      }
+    } else if (payload.action === 'request_mod') {
+      await RoomManager.updateRole(payload.requesterId, Role.MODERATOR);
+      const updatedRoom = await RoomManager.getRoom(roomId);
+      this.io.to(roomId).emit(Events.ROLE_ASSIGNED, {
+        userId: payload.requesterId,
+        username: payload.requesterName,
+        role: Role.MODERATOR,
+        participants: updatedRoom?.participants || []
+      });
+    }
+
+    // Notify requester
+    this.io.to(payload.requesterId).emit(Events.REQUEST_APPROVED, {
+      requestId: payload.requestId,
+      message: `Your request was approved by @${approver.username}!`
+    });
+
+    // Broadcast system chat notification
+    this.io.to(roomId).emit(Events.CHAT_MESSAGE, {
+      userId: 'system',
+      username: 'System',
+      text: `@${approver.username} approved @${payload.requesterName}'s request!`,
+      timestamp: Date.now()
+    });
+  }
+
+  private async handleRejectRequest(payload: { requestId: string; requesterId: string; requesterName: string; reason?: string }): Promise<void> {
+    const roomId = this.socket.data.roomId;
+    if (!roomId) return;
+
+    const rejector = await RoomManager.getParticipant(this.socket.id);
+    if (!rejector || (rejector.role !== Role.HOST && rejector.role !== Role.MODERATOR)) {
+      this.socket.emit(Events.ERROR, { message: 'Unauthorized' });
+      return;
+    }
+
+    // Notify requester
+    this.io.to(payload.requesterId).emit(Events.REQUEST_REJECTED, {
+      requestId: payload.requestId,
+      message: `Your request was declined by @${rejector.username}.`
+    });
   }
 
   private async handleAssignRole(payload: { userId: string; role: Role }): Promise<void> {
@@ -213,10 +325,13 @@ export class SocketController {
   private handleChatMessage(payload: { text: string }): void {
     const roomId = this.socket.data.roomId;
     if (!roomId || !payload.text) return;
+    const trimmedText = payload.text.trim();
+    if (!trimmedText || trimmedText.length > 500) return;
+
     this.io.to(roomId).emit(Events.CHAT_MESSAGE, {
       userId: this.socket.id,
       username: this.socket.data.username,
-      text: payload.text,
+      text: trimmedText,
       timestamp: Date.now()
     });
   }
@@ -224,10 +339,11 @@ export class SocketController {
   private handleReaction(payload: { emoji: string }): void {
     const roomId = this.socket.data.roomId;
     if (!roomId || !payload.emoji) return;
+    const cleanEmoji = payload.emoji.slice(0, 10);
     this.io.to(roomId).emit(Events.REACTION, {
       userId: this.socket.id,
       username: this.socket.data.username,
-      emoji: payload.emoji
+      emoji: cleanEmoji
     });
   }
 

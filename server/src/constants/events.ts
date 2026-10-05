@@ -14,5 +14,11 @@ export const Events = {
   PARTICIPANT_REMOVED: 'participant_removed',
   CHAT_MESSAGE: 'chat_message',
   REACTION: 'reaction',
+  REQUEST_CHANGE: 'request_change',
+  ACTION_REQUESTED: 'action_requested',
+  APPROVE_REQUEST: 'approve_request',
+  REJECT_REQUEST: 'reject_request',
+  REQUEST_APPROVED: 'request_approved',
+  REQUEST_REJECTED: 'request_rejected',
   ERROR: 'error'
 };

@@ -35,8 +35,9 @@ const ChatBox: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim()) return;
-    socket.emit('chat_message', { text: inputText.trim() });
+    const text = inputText.trim();
+    if (!text || text.length > 500) return;
+    socket.emit('chat_message', { text });
     setInputText('');
   };
 
@@ -50,12 +51,14 @@ const ChatBox: React.FC = () => {
         ) : (
           messages.map((msg, idx) => {
             const isMe = msg.userId === currentUser?.id;
+            const isSystem = msg.userId === 'system';
             return (
               <div 
                 key={idx} 
-                className={`chat-bubble ${isMe ? 'mine' : 'theirs'}`}
+                className={`chat-bubble ${isSystem ? 'system' : isMe ? 'mine' : 'theirs'}`}
               >
-                {!isMe && <div className="chat-author-name">{msg.username}</div>}
+                {!isMe && !isSystem && <div className="chat-author-name">{msg.username}</div>}
+                {isSystem && <div className="chat-system-badge">System Notice</div>}
                 <div>{msg.text}</div>
               </div>
             );
@@ -69,10 +72,11 @@ const ChatBox: React.FC = () => {
           type="text" 
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="Type a message..." 
+          placeholder="Type a message (max 500 chars)..." 
+          maxLength={500}
           className="input-field chat-input"
         />
-        <button type="submit" className="btn">Send</button>
+        <button type="submit" className="btn" disabled={!inputText.trim()}>Send</button>
       </form>
     </div>
   );
