@@ -41,6 +41,9 @@ const YouTubePlayer: React.FC = () => {
           controls: 0,
           disablekb: 1,
           rel: 0,
+          enablejsapi: 1,
+          origin: window.location.origin,
+          host: 'https://www.youtube.com'
         },
         events: {
           onReady: (event: any) => {
