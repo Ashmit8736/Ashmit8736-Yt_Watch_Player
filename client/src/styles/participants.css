@@ -1,0 +1,66 @@
+/* Participant List & Role Styles */
+.participant-card {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.participant-title {
+  margin-top: 0;
+  margin-bottom: 14px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #2f3640;
+}
+
+.participant-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.participant-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #f1f2f6;
+}
+
+.participant-item:last-child {
+  border-bottom: none;
+}
+
+.participant-name {
+  display: block;
+  font-weight: 600;
+  font-size: 15px;
+  color: #2f3640;
+}
+
+.participant-role-tag {
+  font-size: 12px;
+  color: #7f8fa6;
+  font-weight: 500;
+}
+
+.participant-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.role-select {
+  padding: 5px 8px;
+  font-size: 12px;
+  border: 1px solid #dcdde1;
+  border-radius: 4px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.kick-btn {
+  padding: 4px 8px;
+  font-size: 12px;
+}

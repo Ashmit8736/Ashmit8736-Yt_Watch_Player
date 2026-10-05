@@ -1,0 +1,59 @@
+/* RoomPage Layout & Header Styles */
+.room-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.room-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .room-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #ffffff;
+  padding: 16px 24px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
+}
+
+.room-header-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: #2f3640;
+}
+
+.room-badge {
+  background: #e1f5fe;
+  color: #0288d1;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #b3e5fc;
+}
+
+.video-section-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.sidebar-section-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}

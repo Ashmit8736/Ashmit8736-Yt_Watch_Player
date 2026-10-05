@@ -1,0 +1,124 @@
+/* HomePage Specific Styles */
+.home-container {
+  max-width: 540px;
+  margin: 40px auto;
+  padding: 0 16px;
+}
+
+.home-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.home-title {
+  text-align: center;
+  font-size: 28px;
+  font-weight: 700;
+  color: #2f3640;
+  margin-bottom: 6px;
+}
+
+.home-subtitle {
+  text-align: center;
+  color: #7f8fa6;
+  font-size: 14px;
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
+.active-party-banner {
+  background: #e3f2fd;
+  border: 1px solid #90caf9;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.active-party-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.active-party-badge {
+  font-weight: 700;
+  color: #1565c0;
+  font-size: 14px;
+}
+
+.active-party-count {
+  font-size: 12px;
+  background: #bbdefb;
+  padding: 3px 10px;
+  border-radius: 12px;
+  color: #0d47a1;
+  font-weight: 600;
+}
+
+.auth-box {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 18px;
+  margin-bottom: 24px;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.auth-tab-btn {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 15px;
+  transition: all 0.2s ease;
+}
+
+.auth-tab-btn.active {
+  font-weight: 700;
+  color: #0097e6;
+  border-bottom: 2px solid #0097e6;
+}
+
+.auth-tab-btn:not(.active) {
+  color: #7f8fa6;
+  border-bottom: 2px solid transparent;
+}
+
+.auth-error-msg {
+  color: #e84118;
+  font-size: 13px;
+  margin-bottom: 10px;
+  background: #ffebe6;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+.password-input-wrapper {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #0097e6;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 6px;
+}
