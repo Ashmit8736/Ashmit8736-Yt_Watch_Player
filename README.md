@@ -239,24 +239,24 @@ Never commit `.env` files. They are listed in `.gitignore`.
 
 The frontend and backend are deployed separately.
 
-### Backend (Render or Railway)
+### Backend (Render)
 
 1. Push the repository to GitHub.
-2. Create a **Web Service** with the **Root Directory** set to `server`.
+2. Create a **Web Service** on **Render** with the **Root Directory** set to `server`.
 3. **Build command:** `npm install && npm run build`
 4. **Start command:** `npm start`
 5. Set environment variables: `NODE_ENV=production`, `JWT_SECRET=<random string>`, `CLIENT_URL=<your frontend URL>`, and optionally `REDIS_URL`.
 6. Verify with `GET <backend-url>/health`.
 
-Both Render and Railway support WebSocket connections, which Socket.IO requires.
+Render supports WebSocket connections natively, which Socket.IO requires.
 
-### Frontend (Vercel or Netlify)
+### Frontend (Vercel)
 
-1. Import the repository and set the **Root Directory** to `client` (framework preset: Vite).
-2. Set `VITE_API_BASE_URL` and `VITE_SOCKET_URL` to the backend URL.
-3. Deploy. `client/vercel.json` rewrites all paths to `index.html`, so room links such as `/room/ABC123` keep working on refresh. On Netlify, add an equivalent `_redirects` rule: `/* /index.html 200`.
+1. Import the repository on **Vercel** and set the **Root Directory** to `client` (framework preset: Vite).
+2. Set `VITE_API_BASE_URL` and `VITE_SOCKET_URL` to your live Render backend URL.
+3. Deploy. `client/vercel.json` rewrites all paths to `index.html`, so room links such as `/room/ABC123` keep working on refresh.
 
-After the frontend URL is known, update `CLIENT_URL` on the backend and redeploy it.
+After the frontend URL is known, update `CLIENT_URL` on the Render backend service settings.
 
 > **Persistence note:** SQLite writes to a local file. On free hosting tiers with an ephemeral disk (such as Render Free), data is lost on restart or redeploy. Rooms are short-lived by design and the server clears stale room state on startup, but registered users would also be lost. For durable accounts, attach a persistent disk or move to a managed database (PostgreSQL, Turso).
 
