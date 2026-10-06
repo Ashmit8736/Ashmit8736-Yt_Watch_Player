@@ -4,7 +4,7 @@ A real-time, synchronized YouTube watching experience. Users create or join room
 
 **Live demo:** _to be added after deployment_ (frontend: `https://<your-app>.vercel.app`, backend: `https://<your-api>.onrender.com`)
 
-**Tech stack:** React 18 · TypeScript · Vite · Node.js · Express · Socket.IO · SQLite · Redis (optional) · YouTube IFrame API
+**Tech stack:** React 18 · TypeScript · Vite · Node.js · Express · Socket.IO · Turso (Cloud LibSQL / SQLite) · SQLite (local fallback) · Redis (optional) · YouTube IFrame API
 
 ---
 
@@ -13,13 +13,14 @@ A real-time, synchronized YouTube watching experience. Users create or join room
 1. [Features](#features)
 2. [Role-Based Access Control](#role-based-access-control)
 3. [Architecture](#architecture)
-4. [WebSocket Event Reference](#websocket-event-reference)
-5. [Project Structure](#project-structure)
-6. [Local Setup](#local-setup)
-7. [Environment Variables](#environment-variables)
-8. [Deployment](#deployment)
-9. [Testing Notes](#testing-notes)
-10. [Design Decisions and Trade-offs](#design-decisions-and-trade-offs)
+4. [Why Turso (Cloud Database)](#why-turso-cloud-database)
+5. [WebSocket Event Reference](#websocket-event-reference)
+6. [Project Structure](#project-structure)
+7. [Local Setup](#local-setup)
+8. [Environment Variables](#environment-variables)
+9. [Deployment](#deployment)
+10. [Testing Notes](#testing-notes)
+11. [Design Decisions and Trade-offs](#design-decisions-and-trade-offs)
 
 ---
 
@@ -40,7 +41,7 @@ A real-time, synchronized YouTube watching experience. Users create or join room
 - Live text chat (500-character limit, trimmed server-side).
 - Floating emoji reactions broadcast to the room.
 - Authentication: registration and login with bcrypt-hashed passwords and JWT sessions. Login is required to create or join a room.
-- Persistent storage of rooms, participants and video state in SQLite.
+- **Cloud Database Persistence:** powered by **Turso (LibSQL)** in production so all registered users and rooms persist across server restarts, with automatic fallback to local SQLite for offline development.
 - Horizontal scaling support through the Socket.IO Redis adapter (Pub/Sub). Falls back to the in-memory adapter when Redis is not configured.
 - Object-oriented domain model (`Participant`, `Room`) and controller/service separation on the backend.
 
@@ -70,7 +71,7 @@ How it is enforced:
 
 ---
 
-## Architecture
+### Architecture
 
 ```
         Browser A (Host)                 Browser B (Participant)
@@ -78,14 +79,14 @@ How it is enforced:
               |  Socket.IO (WebSocket)            |
               +----------------+------------------+
                                v
-                  Node.js / Express server
+                   Node.js / Express server
         +--------------------------------------------+
         |  socketAuthMiddleware  (verifies JWT)      |
         |  SocketController      (events + RBAC)     |
         |  RoomManager           (rooms, state, DB)  |
         +----------------------+---------------------+
                                |
-                 SQLite (rooms, participants, video_states, users)
+       Turso Cloud Database (LibSQL) / Local SQLite (dev.sqlite)
                                |
               Redis Pub/Sub (optional, multi-instance fan-out)
 ```
@@ -105,6 +106,31 @@ How it is enforced:
 **Host leaves:** when the Host disconnects, playback is paused for the room so participants do not drift. When the last participant leaves, the room is deleted.
 
 **Scaling:** with `REDIS_URL` set, the `@socket.io/redis-adapter` publishes room broadcasts across instances so participants connected to different servers stay in sync. Run multiple instances behind a load balancer with sticky sessions for the Socket.IO polling handshake.
+
+---
+
+## Why Turso (Cloud Database)
+
+In production on platforms like **Render**, the application uses **[Turso](https://turso.tech)** (powered by **LibSQL**, the open-source distributed fork of SQLite) as its cloud database.
+
+### Key Reasons for Choosing Turso:
+
+1. **100% SQLite Query Compatibility (Zero Code Changes):**
+   - The application was built from the ground up on SQLite's clean relational model (`users`, `rooms`, `participants`, `video_states`).
+   - Turso uses **LibSQL**, which supports native SQLite queries directly over HTTP/WebSockets. This allowed adopting a distributed cloud database without changing any SQL schemas, queries, or data types.
+
+2. **Durable Persistence on Ephemeral Cloud Containers:**
+   - Free hosting platforms like Render use **ephemeral disks** that reset local files (`dev.sqlite`) whenever the container restarts, sleeps, or redeploys.
+   - Turso provides managed, persistent cloud storage so user registrations, password hashes, and room histories survive permanently across deployments.
+
+3. **Sub-millisecond Edge Latency & No Cold Starts:**
+   - Turso databases are deployed close to the user (e.g. `AWS AP South / Mumbai`).
+   - Unlike alternatives (e.g. Supabase free projects that auto-pause/sleep after inactivity, or serverless Postgres cold starts), Turso free tier never pauses or sleeps.
+
+4. **Seamless Hybrid Architecture (Local & Cloud):**
+   - The database layer (`server/src/config/db.ts`) dynamically detects if `TURSO_DATABASE_URL` is configured:
+     - **Production (Render):** Automatically uses `@libsql/client` to execute queries against the Turso cloud.
+     - **Local Development:** Automatically falls back to a zero-config local `dev.sqlite` file without needing internet or remote tokens.
 
 ---
 
@@ -221,6 +247,8 @@ cd client && npm run build                  # outputs client/dist
 | `JWT_SECRET` | Yes in production | Secret used to sign JWTs. The server refuses to start in production without it. |
 | `CLIENT_URL` | Yes in production | Allowed frontend origin for CORS (e.g. `https://your-app.vercel.app`). |
 | `NODE_ENV` | Recommended | Set to `production` when deployed. Enables strict CORS. |
+| `TURSO_DATABASE_URL` | Recommended in prod | Turso Cloud Database URL (`libsql://...`). Enables permanent persistence on Render. |
+| `TURSO_AUTH_TOKEN` | If using Turso | Auth token for Turso Cloud Database. |
 | `REDIS_URL` | No | Redis connection URL (e.g. Upstash `rediss://...`). Enables multi-instance scaling. |
 | `REDIS_HOST`, `REDIS_PORT` | No | Alternative to `REDIS_URL`. |
 
@@ -245,7 +273,13 @@ The frontend and backend are deployed separately.
 2. Create a **Web Service** on **Render** with the **Root Directory** set to `server`.
 3. **Build command:** `npm install && npm run build`
 4. **Start command:** `npm start`
-5. Set environment variables: `NODE_ENV=production`, `JWT_SECRET=<random string>`, `CLIENT_URL=<your frontend URL>`, and optionally `REDIS_URL`.
+5. Set environment variables:
+   - `NODE_ENV=production`
+   - `JWT_SECRET=<random string>`
+   - `CLIENT_URL=<your frontend URL>`
+   - `TURSO_DATABASE_URL=<your Turso database URL>`
+   - `TURSO_AUTH_TOKEN=<your Turso auth token>`
+   - (Optionally) `REDIS_URL` for multi-server scaling.
 6. Verify with `GET <backend-url>/health`.
 
 Render supports WebSocket connections natively, which Socket.IO requires.
