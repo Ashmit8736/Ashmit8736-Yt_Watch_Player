@@ -2,7 +2,9 @@
 
 A real-time, synchronized YouTube watching experience. Users create or join rooms, and everyone in a room sees the same video state (play/pause, seek position, current video) with role-based control over playback.
 
-**Live demo:** _to be added after deployment_ (frontend: `https://<your-app>.vercel.app`, backend: `https://<your-api>.onrender.com`)
+**Live demo:**
+- **Frontend (Vercel):** [https://ashmit8736-yt-watch-player.vercel.app](https://ashmit8736-yt-watch-player.vercel.app)
+- **Backend (Render):** [https://ashmit8736-yt-watch-player.onrender.com](https://ashmit8736-yt-watch-player.onrender.com)
 
 **Tech stack:** React 18 · TypeScript · Vite · Node.js · Express · Socket.IO · Turso (Cloud LibSQL / SQLite) · SQLite (local fallback) · Redis (optional) · YouTube IFrame API
 
