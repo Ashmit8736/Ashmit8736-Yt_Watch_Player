@@ -36,7 +36,7 @@ const YouTubePlayer: React.FC = () => {
       playerRef.current = new window.YT.Player('youtube-player', {
         height: '450',
         width: '100%',
-        videoId: videoState.videoId || 'dQw4w9WgXcQ',
+        videoId: videoState.videoId || 'ZJW1sEW5QHk',
         playerVars: {
           controls: 0,
           disablekb: 1,

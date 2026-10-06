@@ -20,7 +20,7 @@ export class Room {
     this.videoState = initialVideoState || {
       playState: 'paused',
       currentTime: 0,
-      videoId: 'dQw4w9WgXcQ',
+      videoId: 'ZJW1sEW5QHk',
       updatedAt: Date.now()
     };
   }

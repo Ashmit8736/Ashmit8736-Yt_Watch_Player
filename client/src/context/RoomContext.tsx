@@ -28,7 +28,7 @@ const defaultState: RoomContextState = {
   roomId: null,
   participants: [],
   currentUser: null,
-  videoState: { playState: 'paused', currentTime: 0, videoId: '', updatedAt: 0 },
+  videoState: { playState: 'paused', currentTime: 0, videoId: 'ZJW1sEW5QHk', updatedAt: 0 },
   setRoomId: () => {},
   setParticipants: () => {},
   setCurrentUser: () => {},

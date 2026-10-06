@@ -12,7 +12,7 @@ class RoomManagerService {
       roomId,
       playState: 'paused',
       currentTime: 0,
-      videoId: '',
+      videoId: 'ZJW1sEW5QHk',
       updatedAt: Date.now()
     };
     
